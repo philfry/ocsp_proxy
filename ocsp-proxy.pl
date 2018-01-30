@@ -86,7 +86,7 @@ sub update_cache {
 }
 
 sub refresh_cache {
-  debug("in refresh_cache");
+  debug("refresh_cache");
   my $redis;
   eval {
     $redis = new Redis(
@@ -115,9 +115,8 @@ sub refresh_cache {
     $cache{'lastchecked'} ||= 0;
     my $intvl = (($cache{'nextupd'}-$cache{'thisupd'})/2+$cache{'thisupd'} > time)?86400:3600;
 
-    debug("interval %d lastchecked %d now %d", $intvl, $cache{'lastchecked'}, time);
     if ($cache{'lastchecked'}+$intvl < time) {
-      debug("refreshing %s", $cache_key);
+      info("refreshing %s", $cache_key);
       if (update_cache(\%cache)) {
         $cache{'lastchecked'} = time;
         eval {$redis->hmset($cache_key, %cache)};
