@@ -139,7 +139,7 @@ GetOptions(
     'h|help' => sub {pod2usage({'-exitval' => 3, '-verbose' => 2})}
 ) or pod2usage({'-exitval' => 3, '-verbose' => 0});
 
-$0 = "ocsp-proxy";
+$0 = "ocsp-proxy" unless $config->{'verbose'};
 my @threads;
 push @threads, new threads(sub{
     for (;;) {
