@@ -139,11 +139,12 @@ GetOptions(
     'h|help' => sub {pod2usage({'-exitval' => 3, '-verbose' => 2})}
 ) or pod2usage({'-exitval' => 3, '-verbose' => 0});
 
+$0 = "ocsp-proxy";
 my @threads;
 push @threads, new threads(sub{
     for (;;) {
       refresh_cache();
-      sleep 60
+      sleep 1800
     }
 });
 

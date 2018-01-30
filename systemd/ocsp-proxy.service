@@ -1,0 +1,20 @@
+[Unit]
+Description=OCSP proxy
+Documentation=man:ocsp-proxy(8)
+Before=httpd.service
+After=network.target redis.service
+
+[Service]
+Environment=host=localhost
+Environment=port=8888
+Environment=redis_sock=/run/redis/redis.sock
+Environment=redis_prefix=ocspxy_
+EnvironmentFile=-/etc/sysconfig/ocsp-proxy
+ExecStartPre=/bin/test -S $redis_sock -a -r $redis_sock
+ExecStart=/usr/sbin/ocsp-proxy -H $host -p $port -s $redis_sock -x $redis_prefix
+User=ocspproxy
+Group=ocspproxy
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
