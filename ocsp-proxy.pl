@@ -27,7 +27,9 @@ use POSIX;
 
 use threads;
 
-$|++;
+select(STDERR); $|++;
+select(STDOUT); $|++;
+
 my $config = {
     'host' => 'localhost',
     'port' => 8888,
