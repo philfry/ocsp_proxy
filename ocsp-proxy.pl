@@ -157,20 +157,35 @@ sub main {
   my $asn = new Convert::ASN1;
   my $asn_ret = $asn->prepare(q<
   OCSPRequest ::= SEQUENCE { tbsRequest TBSRequest }
-  TBSRequest ::= SEQUENCE { requestList SEQUENCE OF Request }
-  Request ::= SEQUENCE { reqCert CertID }
+  TBSRequest ::= SEQUENCE {
+    version [0] EXPLICIT Version OPTIONAL,
+    requestList SEQUENCE OF Request,
+    requestExtensions [2] EXPLICIT Extensions OPTIONAL
+  }
+  Version ::= ENUMERATED { v1 (0) }
+  Request ::= SEQUENCE {
+    reqCert CertID,
+    singleRequestExtensions [0] EXPLICIT Extensions OPTIONAL
+  }
   CertificateSerialNumber ::= INTEGER
 
   CertID ::= SEQUENCE {
-      hashAlgorithm  AlgorithmIdentifier,
-      issuerNameHash OCTET STRING,
-      issuerKeyHash  OCTET STRING,
-      serialNumber   CertificateSerialNumber
+    hashAlgorithm AlgorithmIdentifier,
+    issuerNameHash OCTET STRING,
+    issuerKeyHash OCTET STRING,
+    serialNumber CertificateSerialNumber
   }
 
   AlgorithmIdentifier ::= SEQUENCE {
-    algorithm  OBJECT IDENTIFIER,
-      parameters ANY DEFINED BY algorithm OPTIONAL
+    algorithm OBJECT IDENTIFIER,
+    parameters ANY DEFINED BY algorithm OPTIONAL
+  }
+
+  Extensions ::= SEQUENCE OF Extension
+  Extension ::= SEQUENCE {
+    extnID OBJECT IDENTIFIER,
+    critical BOOLEAN OPTIONAL,
+    extnValue OCTET STRING
   }
 
   >);

@@ -24,9 +24,14 @@ Once in a while (i.e. every 30mins) `ocsp-proxy` checks its cache for freshness.
 This way we (should) always have a fresh ocsp response in our cache. Yay.
 
 ## usage
-
 install all dependent perl modules, install redis, take a look at `perldoc ./ocsp-proxy.pl` and have fun.
 To make `apache httpd` use the proxy, add this to your ssl config:
 ```
 SSLOCSPProxyURL http://127.0.0.1:8888/
 ```
+
+## caveat
+ocsp responses with NONCEs are, for obvious reasons, not cached.
+
+## known bugs
+`ocsp-proxy` cannot handle multiple ocsp requests per client request (`requestList`).
