@@ -438,7 +438,7 @@ ocsp-proxy - a caching ocsp proxy :)
 
 =head1 VERSION
 
- 0.1
+ 0.2
 
 =head1 SYNOPSIS
 
