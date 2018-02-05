@@ -17,7 +17,6 @@ use LWP;
 
 use Redis;
 
-use Net::SSLeay;
 use Convert::ASN1;
 
 use Getopt::Long;
@@ -37,6 +36,63 @@ my $config = {
     'rprefix' => 'ocspxy_'
 };
 
+my $asn_common = q<
+Name ::= CHOICE { rdnSequence RDNSequence }
+    RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
+        RelativeDistinguishedName ::= SET OF AttributeTypeAndValue
+            AttributeTypeAndValue ::= SEQUENCE {
+                type AttributeType,
+                value AttributeValue
+            }
+                AttributeType ::= OBJECT IDENTIFIER
+                AttributeValue ::= ANY
+
+Version ::= ENUMERATED {
+    v1 (0),
+    v2 (1),
+    v3 (2)
+}
+
+Validity ::= SEQUENCE {
+    notBefore Time,
+    notAfter  Time
+}
+
+    Time ::= CHOICE {
+        utcTime     UTCTime,
+        generalTime GeneralizedTime
+    }
+
+SubjectPublicKeyInfo ::= SEQUENCE {
+    algorithm        AlgorithmIdentifier,
+    subjectPublicKey BIT STRING
+}
+
+UniqueIdentifier ::= BIT STRING
+
+CertID ::= SEQUENCE {
+    hashAlgorithm  AlgorithmIdentifier,
+    issuerNameHash OCTET STRING,
+    issuerKeyHash  OCTET STRING,
+    serialNumber   CertificateSerialNumber
+}
+
+AlgorithmIdentifier ::= SEQUENCE {
+    algorithm  OBJECT IDENTIFIER,
+    parameters ANY DEFINED BY algorithm OPTIONAL
+}
+
+CertificateSerialNumber ::= INTEGER
+
+Extensions ::= SEQUENCE OF Extension
+
+    Extension ::= SEQUENCE {
+       extnID    OBJECT IDENTIFIER,
+       critical  BOOLEAN OPTIONAL,
+       extnValue OCTET STRING
+    }
+>;
+
 sub debug {
   return unless $config->{'verbose'};
   my $fmt = shift; printf STDERR "[debug] $fmt\n", @_
@@ -48,6 +104,89 @@ sub bailout { error(@_); exit 1 }
 
 sub update_cache {
   my $cr = $_[0];
+
+  ### asn.1 decoder ###
+  my $asn = new Convert::ASN1;
+  my $asn_ret = $asn->prepare($asn_common . q<
+OCSPResponse ::= SEQUENCE {
+    responseStatus     OCSPResponseStatus,
+    responseBytes  [0] EXPLICIT ResponseBytes OPTIONAL
+}
+
+    OCSPResponseStatus ::= ENUMERATED {
+        successful       (0),
+        malformedRequest (1),
+        internalError    (2),
+        tryLater         (3),
+        sigRequired      (5),
+        unauthorized     (6)
+    }
+
+    ResponseBytes ::= SEQUENCE {
+        responseType OBJECT IDENTIFIER,
+        response     OCTET STRING
+    }
+
+BasicOCSPResponse ::= SEQUENCE {
+    tbsResponseData        ResponseData,
+    signatureAlgorithm     AlgorithmIdentifier,
+    signature              BIT STRING,
+    certs                  ANY
+}
+
+    ResponseData ::= SEQUENCE {
+        version            [0] EXPLICIT Version OPTIONAL,
+        responderID            ResponderID,
+        producedAt             GeneralizedTime,
+        responses              SEQUENCE OF SingleResponse,
+        responseExtensions [1] EXPLICIT Extensions OPTIONAL
+    }
+
+        ResponderID ::= CHOICE {
+            byName [1] Name,
+            byKey  [2] KeyHash
+        }
+
+            KeyHash ::= CHOICE { keyHash KeyHashString }
+            KeyHashString ::= OCTET STRING
+
+        SingleResponse ::= SEQUENCE {
+            certID               CertID,
+            certStatus           CertStatus,
+            thisUpdate           GeneralizedTime,
+            nextUpdate       [0] EXPLICIT GeneralizedTime OPTIONAL,
+            singleExtensions [1] EXPLICIT Extensions OPTIONAL
+        }
+
+            CertStatus ::= CHOICE {
+                good    [0] IMPLICIT NULL,
+                revoked [1] IMPLICIT RevokedInfo,
+                unknown [2] IMPLICIT UnknownInfo
+            }
+
+            RevokedInfo ::= SEQUENCE {
+                revocationTime       GeneralizedTime,
+                revocationReason [0] EXPLICIT CRLReason OPTIONAL
+            }
+
+                CRLReason ::= ENUMERATED {
+                    unspecified           (0),
+                    keyCompromise         (1),
+                    cACompromise          (2),
+                    affiliationChanged    (3),
+                    superseded            (4),
+                    cessationOfOperation  (5),
+                    certificateHold       (6),
+                    removeFromCRL         (8),
+                    privilegeWithdrawn    (9),
+                    aACompromise         (10)
+                }
+
+            UnknownInfo ::= NULL
+  >);
+  bailout("asn1 definition preparation failed: ". $asn->error()) unless $asn_ret;
+  my $asn_top = $asn->find("OCSPResponse");
+  bailout("asn1 cannot find top of structure: ". $asn->error()) unless $asn_top;
 
   my $ua = new LWP::UserAgent('agent' => "ocsp_proxy");
   my $proxy_req = new HTTP::Request('POST' => "http://".$cr->{'ocsp_responder'});
@@ -64,24 +203,39 @@ sub update_cache {
     $proxy_res->header('Content-Type') eq "application/ocsp-response") {
     debug("ocsp responder answered");
 
-    my $ocsp_resp = eval {
-      Net::SSLeay::d2i_OCSP_RESPONSE($proxy_res->content)
-    };
+    my $ocsp_resp = $asn_top->decode($proxy_res->content);
 
-    if (Net::SSLeay::OCSP_response_status($ocsp_resp) ==
-      Net::SSLeay::OCSP_RESPONSE_STATUS_SUCCESSFUL()) {
-      my @ocsp_res = Net::SSLeay::OCSP_response_results($ocsp_resp);
-      %$cr = (%$cr,
-        'thisupd' => $ocsp_res[0]->[2]->{'thisUpdate'},
-        'nextupd' => $ocsp_res[0]->[2]->{'nextUpdate'},
-        'status'  => $ocsp_res[0]->[2]->{'statusType'},
-        'response' => $proxy_res->content,
-        'lastchecked' => time
-      );
-      debug("got a valid ocsp response: [this:%d] [next:%d] [status:%d]",
-        $cr->{'thisupd'}, $cr->{'nextupd'}, $cr->{'status'});
-      1
+    unless ($ocsp_resp) { warning "cannot decode ocsp response"; return }
+
+    unless ($ocsp_resp->{'responseStatus'} == 0) {
+      warning "ocsp response status is %d", $ocsp_resp->{'responseStatus'};
+      return
     }
+
+    $asn_top = $asn->find("BasicOCSPResponse");
+    bailout("asn1 cannot find top of structure: ". $asn->error()) unless $asn_top;
+
+    my $basic_resp = $asn_top->decode($ocsp_resp->{'responseBytes'}->{'response'});
+    unless ($basic_resp) { warning "cannot decode basic ocsp response"; return }
+
+    my $nonce_ext = 0;
+    foreach my $resx (@{$basic_resp->{'tbsResponseData'}->{'responseExtensions'}}) {
+      next unless $resx->{'extnID'} eq "1.3.6.1.5.5.7.48.1.2";
+      $nonce_ext++
+    }
+
+    %$cr = (%$cr,
+      'nonce' => $nonce_ext,
+      'nextupd' => $basic_resp->{'tbsResponseData'}->{'responses'}->[0]->{'nextUpdate'},
+      'thisupd' => $basic_resp->{'tbsResponseData'}->{'responses'}->[0]->{'thisUpdate'},
+      'status'  => keys $basic_resp->{'tbsResponseData'}->{'responses'}->[0]->{'certStatus'},
+      'response' => $proxy_res->content,
+      'lastchecked' => time
+    );
+
+    debug("got a valid ocsp response: [this:%d] [next:%d] [status:%s]",
+      $cr->{'thisupd'}, $cr->{'nextupd'}, $cr->{'status'});
+    1
   }
 }
 
@@ -155,40 +309,21 @@ $_->join foreach @threads;
 sub main {
   ### asn.1 decoder ###
   my $asn = new Convert::ASN1;
-  my $asn_ret = $asn->prepare(q<
-  OCSPRequest ::= SEQUENCE { tbsRequest TBSRequest }
+  my $asn_ret = $asn->prepare($asn_common . q<
+
+  OCSPRequest ::= SEQUENCE {
+    tbsRequest TBSRequest
+--    optionalSignature [0] EXPLICIT ANY OPTIONAL
+  }
   TBSRequest ::= SEQUENCE {
     version [0] EXPLICIT Version OPTIONAL,
     requestList SEQUENCE OF Request,
     requestExtensions [2] EXPLICIT Extensions OPTIONAL
   }
-  Version ::= ENUMERATED { v1 (0) }
   Request ::= SEQUENCE {
     reqCert CertID,
     singleRequestExtensions [0] EXPLICIT Extensions OPTIONAL
-  }
-  CertificateSerialNumber ::= INTEGER
-
-  CertID ::= SEQUENCE {
-    hashAlgorithm AlgorithmIdentifier,
-    issuerNameHash OCTET STRING,
-    issuerKeyHash OCTET STRING,
-    serialNumber CertificateSerialNumber
-  }
-
-  AlgorithmIdentifier ::= SEQUENCE {
-    algorithm OBJECT IDENTIFIER,
-    parameters ANY DEFINED BY algorithm OPTIONAL
-  }
-
-  Extensions ::= SEQUENCE OF Extension
-  Extension ::= SEQUENCE {
-    extnID OBJECT IDENTIFIER,
-    critical BOOLEAN OPTIONAL,
-    extnValue OCTET STRING
-  }
-
-  >);
+  }>);
   bailout("asn1 definition preparation failed: ". $asn->error()) unless $asn_ret;
   my $asn_top = $asn->find("OCSPRequest");
   bailout("asn1 cannot find top of structure: ". $asn->error()) unless $asn_top;
@@ -239,6 +374,7 @@ sub main {
       }
 
       my $ocsp_req = $asn_top->decode($r->content);
+
       unless ($ocsp_req) {
         warning("cannot parse ocsp request");
         $c->send_error(RC_BAD_REQUEST);
@@ -260,8 +396,12 @@ sub main {
         debug("cache needs update");
         %cache = ('ocsp_responder' => $r->header('Host'), 'request' => $r->content);
         if (update_cache(\%cache)) {
-          eval {$redis->hmset($cache_key, %cache)};
-          bailout("redis connection failed: $@") if $@
+          unless ($cache{'nonce'}) {
+            eval {$redis->hmset($cache_key, %cache)};
+            bailout("redis connection failed: $@") if $@
+          } else {
+            warning "responder answered with a nonce, cannot cache those"
+          }
         } else {
           error("cache is invalid and cannot get valid data from ocsp responder");
           eval {$redis->del($cache_key)};
@@ -337,9 +477,8 @@ You may use it together with apache httpd / mod_ssl:
 
  SSLOCSPProxyURL http://127.0.0.1:8888/
 
-OCSP responses are stored in a redis db and are only refreshed when the data has expired.
-
-TODO: refresh sooner.
+OCSP responses are stored in a redis db and are refreshed on daily basis, or
+hourly if the validity period is at half-time.
 
 =head1 DEPENDENCIES
 
@@ -354,8 +493,6 @@ TODO: refresh sooner.
 =item L<LWP>
 
 =item L<Redis>
-
-=item L<Net::SSLeay>
 
 =item L<Convert::ASN1>
 
