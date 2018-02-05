@@ -131,7 +131,7 @@ BasicOCSPResponse ::= SEQUENCE {
     tbsResponseData        ResponseData,
     signatureAlgorithm     AlgorithmIdentifier,
     signature              BIT STRING,
-    certs                  ANY
+    certs                  ANY OPTIONAL
 }
 
     ResponseData ::= SEQUENCE {
