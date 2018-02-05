@@ -184,9 +184,9 @@ BasicOCSPResponse ::= SEQUENCE {
 
             UnknownInfo ::= NULL
   >);
-  bailout("asn1 definition preparation failed: ". $asn->error()) unless $asn_ret;
+  bailout("asn1 definition preparation failed: %s", $asn->error()) unless $asn_ret;
   my $asn_top = $asn->find("OCSPResponse");
-  bailout("asn1 cannot find top of structure: ". $asn->error()) unless $asn_top;
+  bailout("asn1 cannot find top of structure: %s", $asn->error()) unless $asn_top;
 
   my $ua = new LWP::UserAgent('agent' => "ocsp_proxy");
   my $proxy_req = new HTTP::Request('POST' => "http://".$cr->{'ocsp_responder'});
@@ -213,7 +213,7 @@ BasicOCSPResponse ::= SEQUENCE {
     }
 
     $asn_top = $asn->find("BasicOCSPResponse");
-    bailout("asn1 cannot find top of structure: ". $asn->error()) unless $asn_top;
+    bailout("asn1 cannot find top of structure: %s", $asn->error()) unless $asn_top;
 
     my $basic_resp = $asn_top->decode($ocsp_resp->{'responseBytes'}->{'response'});
     unless ($basic_resp) { warning "cannot decode basic ocsp response"; return }
@@ -248,19 +248,19 @@ sub refresh_cache {
       'reconnect' => 60, 'every' => 1_000_000
     )
   };
-  if ($@) {error("refresh/redis: $@"); return}
+  if ($@) {error("refresh/redis: %s", $@); return}
 
   my %cache;
   my @keys;
   eval {@keys = $redis->keys($config->{'rprefix'}."*")};
-  if ($@) {error("refresh_cache: cannot connect to redis: $@"); return}
+  if ($@) {error("refresh_cache: cannot connect to redis: %s", $@); return}
   foreach my $cache_key (@keys) {
     eval {%cache = $redis->hgetall($cache_key)};
-    if ($@) {error("refresh/redis: $@"); return}
+    if ($@) {error("refresh/redis: %s", $@); return}
     unless ($cache{'ocsp_responder'} && $cache{'request'}) {
       error("removing crippled cache entry %s", $cache_key);
       eval {$redis->del($cache_key)};
-      if ($@) {error("refresh/redis: $@"); return}
+      if ($@) {error("refresh/redis: %s", $@); return}
       next
     }
 
@@ -274,7 +274,7 @@ sub refresh_cache {
       if (update_cache(\%cache)) {
         $cache{'lastchecked'} = time;
         eval {$redis->hmset($cache_key, %cache)};
-        if ($@) {error("refresh/redis: $@"); return}
+        if ($@) {error("refresh/redis: %s", $@); return}
       } else {
           error("refreshing %s failed", $cache_key)
       }
@@ -324,9 +324,9 @@ sub main {
     reqCert CertID,
     singleRequestExtensions [0] EXPLICIT Extensions OPTIONAL
   }>);
-  bailout("asn1 definition preparation failed: ". $asn->error()) unless $asn_ret;
+  bailout("asn1 definition preparation failed: %s", $asn->error()) unless $asn_ret;
   my $asn_top = $asn->find("OCSPRequest");
-  bailout("asn1 cannot find top of structure: ". $asn->error()) unless $asn_top;
+  bailout("asn1 cannot find top of structure: %s", $asn->error()) unless $asn_top;
 
   ### redis connection ###
   bailout("redis socket does not exist or is not readable")
@@ -339,7 +339,7 @@ sub main {
       'reconnect' => 60, 'every' => 1_000_000
     )
   };
-  bailout("cannot connect to redis: $@") if $@;
+  bailout("cannot connect to redis: %s", $@) if $@;
   info("connected to redis on %s", $config->{'redis_sock'});
 
   ### http daemon ###
@@ -389,7 +389,7 @@ sub main {
 
       my %cache;
       eval { %cache = $redis->hgetall($cache_key) };
-      bailout("redis connection failed: $@") if $@;
+      bailout("redis connection failed: %s", $@) if $@;
 
       unless (%cache && $cache{'nextupd'} > time && \
         $cache{'thisupd'} > 0 && $cache{'request'} && $cache{'response'}) {
@@ -398,14 +398,14 @@ sub main {
         if (update_cache(\%cache)) {
           unless ($cache{'nonce'}) {
             eval {$redis->hmset($cache_key, %cache)};
-            bailout("redis connection failed: $@") if $@
+            bailout("redis connection failed: %s", $@) if $@
           } else {
             warning "responder answered with a nonce, cannot cache those"
           }
         } else {
           error("cache is invalid and cannot get valid data from ocsp responder");
           eval {$redis->del($cache_key)};
-          bailout("redis connection failed: $@") if $@;
+          bailout("redis connection failed: %s", $@) if $@;
           $c->send_error(RC_SERVICE_UNAVAILABLE);
           next
         }
