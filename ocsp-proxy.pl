@@ -199,44 +199,47 @@ BasicOCSPResponse ::= SEQUENCE {
   debug("forwarding ocsp request to %s", $cr->{'ocsp_responder'});
   my $proxy_res = $ua->request($proxy_req);
 
-  if ($proxy_res->code == 200 &&
+  unless ($proxy_res->code == 200 &&
     $proxy_res->header('Content-Type') eq "application/ocsp-response") {
-    debug("ocsp responder answered");
-
-    my $ocsp_resp = $asn_top->decode($proxy_res->content);
-
-    unless ($ocsp_resp) { warning "cannot decode ocsp response"; return }
-
-    unless ($ocsp_resp->{'responseStatus'} == 0) {
-      warning "ocsp response status is %d", $ocsp_resp->{'responseStatus'};
-      return
-    }
-
-    $asn_top = $asn->find("BasicOCSPResponse");
-    bailout("asn1 cannot find top of structure: %s", $asn->error()) unless $asn_top;
-
-    my $basic_resp = $asn_top->decode($ocsp_resp->{'responseBytes'}->{'response'});
-    unless ($basic_resp) { warning "cannot decode basic ocsp response"; return }
-
-    my $nonce_ext = 0;
-    foreach my $resx (@{$basic_resp->{'tbsResponseData'}->{'responseExtensions'}}) {
-      next unless $resx->{'extnID'} eq "1.3.6.1.5.5.7.48.1.2";
-      $nonce_ext++
-    }
-
-    %$cr = (%$cr,
-      'nonce' => $nonce_ext,
-      'nextupd' => $basic_resp->{'tbsResponseData'}->{'responses'}->[0]->{'nextUpdate'},
-      'thisupd' => $basic_resp->{'tbsResponseData'}->{'responses'}->[0]->{'thisUpdate'},
-      'status'  => keys $basic_resp->{'tbsResponseData'}->{'responses'}->[0]->{'certStatus'},
-      'response' => $proxy_res->content,
-      'lastchecked' => time
-    );
-
-    debug("got a valid ocsp response: [this:%d] [next:%d] [status:%s]",
-      $cr->{'thisupd'}, $cr->{'nextupd'}, $cr->{'status'});
-    1
+      warning("invalid ocsp response (status %d, content-type %s)",
+        $proxy_res->code, $proxy_res->header('Content-Type')||"unknown");
+    return
   }
+  debug("ocsp responder answered");
+
+  my $ocsp_resp = $asn_top->decode($proxy_res->content);
+
+  unless ($ocsp_resp) { warning("cannot decode ocsp response"); return }
+
+  unless ($ocsp_resp->{'responseStatus'} == 0) {
+    warning("ocsp response status is %d", $ocsp_resp->{'responseStatus'});
+    return
+  }
+
+  $asn_top = $asn->find("BasicOCSPResponse");
+  bailout("asn1 cannot find top of structure: %s", $asn->error()) unless $asn_top;
+
+  my $basic_resp = $asn_top->decode($ocsp_resp->{'responseBytes'}->{'response'});
+  unless ($basic_resp) { warning("cannot decode basic ocsp response"); return }
+
+  my $nonce_ext = 0;
+  foreach my $resx (@{$basic_resp->{'tbsResponseData'}->{'responseExtensions'}}) {
+    next unless $resx->{'extnID'} eq "1.3.6.1.5.5.7.48.1.2";
+    $nonce_ext++
+  }
+
+  %$cr = (%$cr,
+    'nonce' => $nonce_ext,
+    'nextupd' => $basic_resp->{'tbsResponseData'}->{'responses'}->[0]->{'nextUpdate'},
+    'thisupd' => $basic_resp->{'tbsResponseData'}->{'responses'}->[0]->{'thisUpdate'},
+    'status'  => keys %{$basic_resp->{'tbsResponseData'}->{'responses'}->[0]->{'certStatus'}},
+    'response' => $proxy_res->content,
+    'lastchecked' => time
+  );
+
+  debug("got a valid ocsp response: [this:%d] [next:%d] [status:%s]",
+    $cr->{'thisupd'}, $cr->{'nextupd'}, $cr->{'status'});
+  1
 }
 
 sub refresh_cache {
@@ -346,7 +349,7 @@ sub main {
   my $daemon = new HTTP::Daemon(
       'LocalAddr' => $config->{'host'},
       'LocalPort' => $config->{'port'},
-      Reuse => 1
+      'Reuse' => 1
   ) or bailout("failed starting HTTP::Daemon");
   info("listening on %s:%d", $config->{'host'}, $config->{'port'});
 
@@ -400,7 +403,7 @@ sub main {
             eval {$redis->hmset($cache_key, %cache)};
             bailout("redis connection failed: %s", $@) if $@
           } else {
-            warning "responder answered with a nonce, cannot cache those"
+            warning("responder answered with a nonce, cannot cache those")
           }
         } else {
           error("cache is invalid and cannot get valid data from ocsp responder");
