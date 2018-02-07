@@ -384,6 +384,21 @@ sub main {
         next
       }
 
+      if (scalar @{$ocsp_req->{'tbsRequest'}->{'requestList'}} > 1) {
+        warning("multiple requests detected -> pass through");
+        my $ua = new LWP::UserAgent('agent' => "ocsp_proxy");
+        my $proxy_req = new HTTP::Request('POST' => "http://".$r->header('Host'));
+        $proxy_req->header(%{$r->headers});
+        $proxy_req->content($r->content);
+        debug("forwarding ocsp request to %s", $r->header('Host'));
+        my $proxy_res = $ua->request($proxy_req);
+        my $client_res = new HTTP::Response($proxy_res->code);
+        $client_res->header(%{$proxy_res->headers});
+        $client_res->content($proxy_res->content);
+        $c->send_response($client_res);
+        next
+      }
+
       my $cache_key = $config->{'rprefix'} . unpack("H*",
         $ocsp_req->{'tbsRequest'}->{'requestList'}->[0]->{'reqCert'}->{'issuerKeyHash'}
         ) .

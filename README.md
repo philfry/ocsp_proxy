@@ -31,7 +31,8 @@ SSLOCSPProxyURL http://127.0.0.1:8888/
 ```
 
 ## caveat
-ocsp responses with NONCEs are, for obvious reasons, not cached.
+ocsp responses with NONCEs are, for obvious reasons, not cached, neither are requests/responses with multiple certificates.
+It doesn't really matter, because all ocsp responders I've seen in the wild won't return NONCEs or multiple responses.
 
 ## known bugs
 `ocsp-proxy` cannot handle multiple ocsp requests per client request (`requestList`).
