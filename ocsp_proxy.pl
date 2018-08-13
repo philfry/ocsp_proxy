@@ -6,6 +6,7 @@
 #
 # author, (c) Philippe Kueck <projects at unixadm dot org>
 #
+# license: lgpl
 
 use strict;
 use warnings;
@@ -297,7 +298,7 @@ GetOptions(
     'h|help' => sub {pod2usage({'-exitval' => 3, '-verbose' => 2})}
 ) or pod2usage({'-exitval' => 3, '-verbose' => 0});
 
-$0 = "ocsp-proxy" unless $config->{'verbose'};
+$0 = "ocsp_proxy" unless $config->{'verbose'};
 my @threads;
 push @threads, new threads(sub{
     for (;;) {
@@ -452,15 +453,15 @@ __END__
 
 =head1 NAME
 
-ocsp-proxy - a caching ocsp proxy :)
+ocsp_proxy - a caching ocsp proxy :)
 
 =head1 VERSION
 
- 0.2
+ 0.3
 
 =head1 SYNOPSIS
 
- ocsp-proxy.pl
+ ocsp_proxy.pl
 
 =head1 OPTIONS
 
@@ -519,5 +520,9 @@ hourly if the validity period is at half-time.
 =head1 AUTHOR
 
 Philippe Kueck <projects at unixadm dot org>
+
+=head1 LICENSE
+
+LGPL 3
 
 =cut
