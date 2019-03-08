@@ -276,7 +276,6 @@ sub refresh_cache {
     if ($cache{'lastchecked'}+$intvl < time) {
       info("refreshing %s", $cache_key);
       if (update_cache(\%cache)) {
-        $cache{'lastchecked'} = time;
         eval {$redis->hmset($cache_key, %cache)};
         if ($@) {error("refresh/redis: %s", $@); return}
       } else {
