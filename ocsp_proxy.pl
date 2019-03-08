@@ -26,9 +26,12 @@ use Pod::Usage;
 use POSIX;
 
 use threads;
+use threads::shared;
 
 select(STDERR); $|++;
 select(STDOUT); $|++;
+
+my $mutex :shared;
 
 my $config = {
     'host' => 'localhost',
@@ -259,6 +262,7 @@ sub refresh_cache {
   eval {@keys = $redis->keys($config->{'rprefix'}."*")};
   if ($@) {error("refresh_cache: cannot connect to redis: %s", $@); return}
   foreach my $cache_key (@keys) {
+    lock $mutex;
     eval {%cache = $redis->hgetall($cache_key)};
     if ($@) {error("refresh/redis: %s", $@); return}
     unless ($cache{'ocsp_responder'} && $cache{'request'}) {
@@ -406,26 +410,29 @@ sub main {
       debug("cache key is %s", $cache_key);
 
       my %cache;
-      eval { %cache = $redis->hgetall($cache_key) };
-      bailout("redis connection failed: %s", $@) if $@;
+      {
+        lock $mutex;
+        eval { %cache = $redis->hgetall($cache_key) };
+        bailout("redis connection failed: %s", $@) if $@;
 
-      unless (%cache && $cache{'nextupd'} > time && \
-        $cache{'thisupd'} > 0 && $cache{'request'} && $cache{'response'}) {
-        debug("cache needs update");
-        %cache = ('ocsp_responder' => $r->header('Host'), 'request' => $r->content);
-        if (update_cache(\%cache)) {
-          unless ($cache{'nonce'}) {
-            eval {$redis->hmset($cache_key, %cache)};
-            bailout("redis connection failed: %s", $@) if $@
+        unless (%cache && $cache{'nextupd'} > time && \
+          $cache{'thisupd'} > 0 && $cache{'request'} && $cache{'response'}) {
+          debug("cache needs update");
+          %cache = ('ocsp_responder' => $r->header('Host'), 'request' => $r->content);
+          if (update_cache(\%cache)) {
+            unless ($cache{'nonce'}) {
+              eval {$redis->hmset($cache_key, %cache)};
+              bailout("redis connection failed: %s", $@) if $@
+            } else {
+              warning("responder answered with a nonce, cannot cache those")
+            }
           } else {
-            warning("responder answered with a nonce, cannot cache those")
+            error("cache is invalid and cannot get valid data from ocsp responder");
+            eval {$redis->del($cache_key)};
+            bailout("redis connection failed: %s", $@) if $@;
+            $c->send_error(RC_SERVICE_UNAVAILABLE);
+            next
           }
-        } else {
-          error("cache is invalid and cannot get valid data from ocsp responder");
-          eval {$redis->del($cache_key)};
-          bailout("redis connection failed: %s", $@) if $@;
-          $c->send_error(RC_SERVICE_UNAVAILABLE);
-          next
         }
       }
 
