@@ -30,6 +30,31 @@ To make `apache httpd` use the proxy, add this to your ssl config:
 SSLOCSPProxyURL http://127.0.0.1:8888/
 ```
 
+## warming up the cache with a certificate
+```bash
+openssl ocsp \
+  -issuer /path/to/issuer.pem \
+  -cert /path/to/certificate.pem \
+  -url http://localhost:8888/ \
+  -header Host $(openssl x509 -in /path/to/issuer.pem -noout -ocsp_uri|cut -d/ -f3) \
+  -no_nonce
+```
+
+## purging a certificate from the cache
+```bash
+openssl ocsp \
+  -issuer /path/to/issuer.pem \
+  -cert /path/to/certificate.pem \
+  -url http://localhost:8888/ \
+  -header X-prune-from-cache 1
+```
+or
+```bash
+eval `openssl x509 -in certificate.pem -noout -serial`
+eval `openssl x509 -in issuer.pem -noout -ocspid | sed -n 's/ *Public key.*: /ihash=/p'`
+redis-cli del ocspxy_${ihash,,}0x${serial,,}
+```
+
 ## caveat
 ocsp responses with NONCEs are, for obvious reasons, not cached, neither are requests/responses with multiple certificates.
 It doesn't really matter, because all ocsp responders I've seen in the wild won't return NONCEs or multiple responses.
