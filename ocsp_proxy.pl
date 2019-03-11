@@ -365,7 +365,7 @@ sub main {
         next
       }
 
-      unless ($r->header('Host')) {
+      unless ($r->header('Host') || $r->header('X-prune-from-cache')) {
         warning("no 'Host' header found");
         $c->send_error(RC_BAD_REQUEST);
         next
@@ -405,6 +405,14 @@ sub main {
         ) .
         $ocsp_req->{'tbsRequest'}->{'requestList'}->[0]->{'reqCert'}->{'serialNumber'}->as_hex;
       debug("cache key is %s", $cache_key);
+
+      if ($r->header('X-prune-from-cache')) {
+        info("removing %s from cache", $cache_key);
+        eval { $redis->del($cache_key) };
+        bailout("redis connection failed: %s", $@) if $@;
+        $c->send_error(RC_GONE);
+        next
+      }
 
       my %cache;
       eval { %cache = $redis->hgetall($cache_key) };
