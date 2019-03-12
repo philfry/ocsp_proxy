@@ -360,7 +360,7 @@ sub main {
   ### main loop ###
   while (my $c = $daemon->accept) {
     info("connection from %s:%d\n", $c->peerhost, $c->peerport);
-    while (my $r = $c->get_request) {
+    REQ: while (my $r = $c->get_request) {
 
       unless ($r->method eq 'POST') {
         warning("method is not POST");
@@ -423,8 +423,8 @@ sub main {
         eval { %cache = $redis->hgetall($cache_key) };
         bailout("redis connection failed: %s", $@) if $@;
 
-        unless (%cache && $cache{'nextupd'} > time && \
-          $cache{'thisupd'} > 0 && $cache{'request'} && $cache{'response'}) {
+        unless (%cache && ($cache{'nextupd'} or 0) > time && \
+          ($cache{'thisupd'} or 0) > 0 && $cache{'request'} && $cache{'response'}) {
           debug("cache needs update");
           %cache = ('ocsp_responder' => $r->header('Host'), 'request' => $r->content);
           if (update_cache(\%cache)) {
@@ -439,7 +439,7 @@ sub main {
             eval {$redis->del($cache_key)};
             bailout("redis connection failed: %s", $@) if $@;
             $c->send_error(RC_SERVICE_UNAVAILABLE);
-            next
+            next REQ
           }
         }
       }
@@ -471,7 +471,7 @@ ocsp_proxy - a caching ocsp proxy :)
 
 =head1 VERSION
 
- 0.3
+ 0.4.1
 
 =head1 SYNOPSIS
 
