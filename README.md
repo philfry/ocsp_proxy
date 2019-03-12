@@ -36,7 +36,7 @@ openssl ocsp \
   -issuer /path/to/issuer.pem \
   -cert /path/to/certificate.pem \
   -url http://localhost:8888/ \
-  -header Host $(openssl x509 -in /path/to/issuer.pem -noout -ocsp_uri|cut -d/ -f3) \
+  -header Host $(openssl x509 -in /path/to/cert.pem -noout -ocsp_uri|cut -d/ -f3) \
   -no_nonce
 ```
 
