@@ -359,7 +359,7 @@ sub main {
 
   ### main loop ###
   while (my $c = $daemon->accept) {
-    info("connection from %s:%d\n", $c->peerhost, $c->peerport);
+    info("connection from %s:%d", $c->peerhost, $c->peerport);
     REQ: while (my $r = $c->get_request) {
 
       unless ($r->method eq 'POST') {
