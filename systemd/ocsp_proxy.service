@@ -10,8 +10,8 @@ Environment=port=8888
 Environment=redis_sock=/run/redis/redis.sock
 Environment=redis_prefix=ocspxy_
 EnvironmentFile=-/etc/sysconfig/ocsp_proxy
-ExecStartPre=/bin/test -S $redis_sock -a -r $redis_sock
-ExecStart=/usr/sbin/ocsp_proxy -H $host -p $port -s $redis_sock -x $redis_prefix
+ExecStartPre=@@TEST_BIN@@ -S $redis_sock -a -r $redis_sock
+ExecStart=@@SBINDIR@@/ocsp_proxy -H $host -p $port -s $redis_sock -x $redis_prefix
 User=ocspproxy
 Group=ocspproxy
 Restart=always
