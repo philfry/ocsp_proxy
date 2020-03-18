@@ -27,7 +27,7 @@ This way we (should) always have a fresh ocsp response in our cache. Yay.
 install all dependent perl modules, install redis, take a look at `perldoc ./ocsp_proxy.pl` and have fun.
 To make `apache httpd` use the proxy, add this to your ssl config:
 ```
-SSLOCSPProxyURL http://127.0.0.1:8888/
+SSLOCSPProxyURL http://localhost:8888/
 ```
 
 ## warming up the cache with a certificate
