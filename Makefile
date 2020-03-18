@@ -7,7 +7,7 @@ TEST_BIN := $(if $(TEST_BIN),$(TEST_BIN),$(wildcard /usr/bin/test))
 .PHONY: all install
 
 all:
-	: nothing to do, run make [PREFIX=..|SBINDIR=..] [SYSTEMD_DIR=..] install to install
+	: "nothing to do, run make [PREFIX=..|SBINDIR=..] [SYSTEMD_DIR=..] install to install"
 
 $(SBINDIR)/ocsp_proxy:
 	install -Dp -m0755 ocsp_proxy.pl $(DESTDIR)$@
