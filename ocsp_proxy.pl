@@ -508,7 +508,7 @@ be verbose
 This daemon acts as a proxy for ocsp requests.
 You may use it together with apache httpd / mod_ssl:
 
- SSLOCSPProxyURL http://127.0.0.1:8888/
+ SSLOCSPProxyURL http://localhost:8888/
 
 OCSP responses are stored in a redis db and are refreshed on daily basis, or
 hourly if the validity period is at half-time.
