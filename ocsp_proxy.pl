@@ -403,10 +403,16 @@ sub main {
         next
       }
 
+      my $ser;
+      eval {
+        $ser = $ocsp_req->{'tbsRequest'}->{'requestList'}->[0]->{'reqCert'}->{'serialNumber'}->as_hex
+      };
+      if ($@) {
+        $ser = sprintf "%x", $ocsp_req->{'tbsRequest'}->{'requestList'}->[0]->{'reqCert'}->{'serialNumber'}
+      }
       my $cache_key = $config->{'rprefix'} . unpack("H*",
         $ocsp_req->{'tbsRequest'}->{'requestList'}->[0]->{'reqCert'}->{'issuerKeyHash'}
-        ) .
-        $ocsp_req->{'tbsRequest'}->{'requestList'}->[0]->{'reqCert'}->{'serialNumber'}->as_hex;
+        ) . $ser;
       debug("cache key is %s", $cache_key);
 
       if ($r->header('X-prune-from-cache')) {
@@ -471,7 +477,7 @@ ocsp_proxy - a caching ocsp proxy :)
 
 =head1 VERSION
 
- 0.4.1
+ 0.4.2
 
 =head1 SYNOPSIS
 
