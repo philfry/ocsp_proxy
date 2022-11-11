@@ -280,7 +280,10 @@ sub refresh_cache {
     if ($cache{'lastchecked'}+$intvl < time) {
       info("refreshing %s", $cache_key);
       if (update_cache(\%cache)) {
-        eval {$redis->hmset($cache_key, %cache)};
+        eval {
+          $redis->hmset($cache_key, %cache);
+          $redis->expire($cache_key, 86400);
+        };
         if ($@) {error("refresh/redis: %s", $@); return}
       } else {
           error("refreshing %s failed", $cache_key)
@@ -429,7 +432,10 @@ sub main {
           %cache = ('ocsp_responder' => $r->header('Host'), 'request' => $r->content);
           if (update_cache(\%cache)) {
             unless ($cache{'nonce'}) {
-              eval {$redis->hmset($cache_key, %cache)};
+              eval {
+                $redis->hmset($cache_key, %cache);
+                $redis->expire($cache_key, 86400);
+              };
               bailout("redis connection failed: %s", $@) if $@
             } else {
               warning("responder answered with a nonce, cannot cache those")
