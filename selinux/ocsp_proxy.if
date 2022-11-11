@@ -1,0 +1,40 @@
+
+## <summary>policy for ocsp_proxy</summary>
+
+########################################
+## <summary>
+##	Execute ocsp_proxy_exec_t in the ocsp_proxy domain.
+## </summary>
+## <param name="domain">
+## <summary>
+##	Domain allowed to transition.
+## </summary>
+## </param>
+#
+interface(`ocsp_proxy_domtrans',`
+	gen_require(`
+		type ocsp_proxy_t, ocsp_proxy_exec_t;
+	')
+
+	corecmd_search_bin($1)
+	domtrans_pattern($1, ocsp_proxy_exec_t, ocsp_proxy_t)
+')
+
+######################################
+## <summary>
+##	Execute ocsp_proxy in the caller domain.
+## </summary>
+## <param name="domain">
+##	<summary>
+##	Domain allowed access.
+##	</summary>
+## </param>
+#
+interface(`ocsp_proxy_exec',`
+	gen_require(`
+		type ocsp_proxy_exec_t;
+	')
+
+	corecmd_search_bin($1)
+	can_exec($1, ocsp_proxy_exec_t)
+')

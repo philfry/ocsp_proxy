@@ -35,7 +35,7 @@ my $mutex :shared;
 
 my $config = {
     'host' => 'localhost',
-    'port' => 8888,
+    'port' => 8008,
     'redis_sock' => '/run/redis/redis.sock',
     'rprefix' => 'ocspxy_'
 };
@@ -477,7 +477,7 @@ ocsp_proxy - a caching ocsp proxy :)
 
 =head1 VERSION
 
- 0.4.1
+ 0.5.0
 
 =head1 SYNOPSIS
 
@@ -514,7 +514,7 @@ be verbose
 This daemon acts as a proxy for ocsp requests.
 You may use it together with apache httpd / mod_ssl:
 
- SSLOCSPProxyURL http://localhost:8888/
+ SSLOCSPProxyURL http://localhost:8008/
 
 OCSP responses are stored in a redis db and are refreshed on daily basis, or
 hourly if the validity period is at half-time.

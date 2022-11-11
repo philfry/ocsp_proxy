@@ -1,0 +1,1 @@
+/usr/sbin/ocsp_proxy		--	gen_context(system_u:object_r:ocsp_proxy_exec_t,s0)

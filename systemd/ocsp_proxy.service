@@ -6,7 +6,7 @@ After=network.target redis.service
 
 [Service]
 Environment=host=localhost
-Environment=port=8888
+Environment=port=8008
 Environment=redis_sock=/run/redis/redis.sock
 Environment=redis_prefix=ocspxy_
 EnvironmentFile=-/etc/sysconfig/ocsp_proxy

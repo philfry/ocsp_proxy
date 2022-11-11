@@ -1,0 +1,35 @@
+policy_module(ocsp_proxy, 0.5.0.1)
+
+########################################
+#
+# Declarations
+#
+
+type ocsp_proxy_t;
+type ocsp_proxy_exec_t;
+
+type bin_t;
+type node_t;
+type redis_var_run_t;
+type http_port_t;
+
+init_daemon_domain(ocsp_proxy_t, ocsp_proxy_exec_t)
+
+permissive ocsp_proxy_t;
+
+########################################
+#
+# ocsp_proxy local policy
+#
+allow ocsp_proxy_t bin_t:file execute;
+allow ocsp_proxy_t redis_var_run_t:dir search_dir_perms;
+allow ocsp_proxy_t redis_var_run_t:sock_file write_sock_file_perms;
+allow ocsp_proxy_t http_port_t:tcp_socket { name_bind name_connect };
+allow ocsp_proxy_t self:tcp_socket create_stream_socket_perms;
+allow ocsp_proxy_t self:netlink_route_socket r_netlink_socket_perms;
+allow ocsp_proxy_t node_t:tcp_socket node_bind;
+allow ocsp_proxy_t self:udp_socket { connect create getattr };
+
+domain_use_interactive_fds(ocsp_proxy_t)
+
+miscfiles_read_localization(ocsp_proxy_t)
