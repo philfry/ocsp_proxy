@@ -10,11 +10,12 @@ Environment=port=8008
 Environment=redis_sock=/run/redis/redis.sock
 Environment=redis_prefix=ocspxy_
 EnvironmentFile=-/etc/sysconfig/ocsp_proxy
-ExecStartPre=@@TEST_BIN@@ -S $redis_sock -a -r $redis_sock
-ExecStart=@@SBINDIR@@/ocsp_proxy -H $host -p $port -s $redis_sock -x $redis_prefix
 User=ocspproxy
 Group=ocspproxy
+ExecStartPre=@@TEST_BIN@@ -S $redis_sock -a -r $redis_sock
+ExecStart=@@SBINDIR@@/ocsp_proxy -H $host -p $port -s $redis_sock -x $redis_prefix
 Restart=always
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target

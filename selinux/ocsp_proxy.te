@@ -1,4 +1,4 @@
-policy_module(ocsp_proxy, 0.5.0.1)
+policy_module(ocsp_proxy, 0.5.0.2)
 
 ########################################
 #
@@ -8,10 +8,12 @@ policy_module(ocsp_proxy, 0.5.0.1)
 type ocsp_proxy_t;
 type ocsp_proxy_exec_t;
 
-type bin_t;
-type node_t;
-type redis_var_run_t;
-type http_port_t;
+gen_require(`
+    type bin_t;
+    type node_t;
+    type redis_var_run_t;
+    type http_port_t;
+')
 
 init_daemon_domain(ocsp_proxy_t, ocsp_proxy_exec_t)
 
